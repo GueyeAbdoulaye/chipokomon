@@ -6,6 +6,7 @@ use App\Entity\Chimpokodex;
 use Doctrine\ORM\Mapping\Id;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\ChimpokodexRepository;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -16,6 +17,8 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\ParamConverter;
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 class ChipokomonController extends AbstractController
 {
@@ -25,11 +28,26 @@ class ChipokomonController extends AbstractController
      * @return JsonResponse
      */
     #[Route('/api/chimpokodex', name: 'chimpokodex.getAll', methods: ['GET'])]
-    public function getAllChimpokodex(ChimpokodexRepository $repository,  SerializerInterface $serializer): JsonResponse
-    {
+    #[IsGranted("IS_AUTHENTICATED_FULLY")]
+    public function getAllChimpokodex(
+        ChimpokodexRepository $repository,  
+        SerializerInterface $serializer,
+        TagAwareCacheInterface $cache
+        ): JsonResponse{
+
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
         // $chimpokodexs = $repository->findAll(); Ancienne méthode sans le filtre du statut
-        $chimpokodexs = $repository->findAllByStatus('ON');
-        $jsonChimpokodex = $serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
+        $idCache = "getAllChimpokodex";
+        
+        $jsonChimpokodex = $cache->get($idCache,function(ItemInterface $item) use ($repository, $serializer){
+          /*   echo"MISE EN CACHE"; */
+            $item->tag('chimpokodexCache');
+            $chimpokodexs = $repository->findAll();
+            
+            return   $serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
+            
+            //$serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
+        });
         return new JsonResponse($jsonChimpokodex,200,[],true);   
     }
 
@@ -44,7 +62,7 @@ class ChipokomonController extends AbstractController
      */
     public function getChimpokodex(Chimpokodex $chimpokodex,  SerializerInterface $serializer, ChimpokodexRepository $repository): JsonResponse
     {
-        $chimpokodexs = $repository->findByStatus('ON',$chimpokodex->getId());
+        $chimpokodexs = $repository->findByStatus('ON');
         $jsonChimpokodex = $serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
         return new JsonResponse($jsonChimpokodex,200,[],true); 
     }
@@ -59,7 +77,14 @@ class ChipokomonController extends AbstractController
      * @param UrlGeneratorInterface $urlGenerator
      * @return JsonResponse
      */
-    public function createChimpokodex(Request $request,  SerializerInterface $serializer, EntityManagerInterface $manager, UrlGeneratorInterface $urlGenerator, ChimpokodexRepository $repository, ValidatorInterface $validator): JsonResponse
+    public function createChimpokodex(
+        Request $request,
+        SerializerInterface $serializer, 
+        EntityManagerInterface $manager, 
+        UrlGeneratorInterface $urlGenerator, 
+        ChimpokodexRepository $repository, 
+        ValidatorInterface $validator,
+        TagAwareCacheInterface $cache): JsonResponse
     {
         $chimpokodex = $serializer->deserialize($request->getContent(), Chimpokodex::class,"json");
         // Cette ligne récupère le contenu Json mis en body de la requete (en désérialisant le contenu de la requête) et le place dans la variable chimpokomon.
@@ -86,10 +111,11 @@ class ChipokomonController extends AbstractController
         $manager->persist($chimpokodex);
         $manager->flush();
     
+        $cache->invalidateTags(["chimpokodexCache"]);
+
         $jsonChimpokodex = $serializer->serialize($chimpokodex, 'json', ['groups' => "getAllWithinEvolutions"]);
 
         $location = $urlGenerator->generate('chimpokodex.get', ["idChimpokodex" => $chimpokodex->getId()], UrlGeneratorInterface::ABSOLUTE_URL);
-
 
         return new JsonResponse($jsonChimpokodex,Response::HTTP_CREATED,["Location" => $location],true);
     }
@@ -105,7 +131,12 @@ class ChipokomonController extends AbstractController
      * @param UrlGeneratorInterface $urlGenerator
      * @return JsonResponse
      */
-    public function updateChimpokodex(Chimpokodex $chimpokodex, Request $request,  SerializerInterface $serializer, EntityManagerInterface $entityManager, ChimpokodexRepository $repository): JsonResponse
+    public function updateChimpokodex(
+        Chimpokodex $chimpokodex, Request $request,  
+        SerializerInterface $serializer, 
+        EntityManagerInterface $entityManager, 
+        ChimpokodexRepository $repository,
+        TagAwareCacheInterface $cache): JsonResponse
     {
         $updatedChimpokodex = $serializer->deserialize($request->getContent(), Chimpokodex::class, "json", [AbstractNormalizer::OBJECT_TO_POPULATE => $chimpokodex]);
         $updatedChimpokodex->setUpdatedAt(new \DateTime());
@@ -124,6 +155,8 @@ class ChipokomonController extends AbstractController
         
         $entityManager->persist($updatedChimpokodex);
         $entityManager->flush();
+
+        $cache->invalidateTags(["chimpokodexCache"]);
 
         return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
     }
@@ -154,7 +187,12 @@ class ChipokomonController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @return JsonResponse
      */
-    public function softdeleteChimpokodex(Chimpokodex $chimpokodex,  Request $request,  SerializerInterface $serializer, EntityManagerInterface $entityManager): JsonResponse
+    public function softdeleteChimpokodex(
+        Chimpokodex $chimpokodex,  
+        Request $request,  
+        SerializerInterface $serializer, 
+        EntityManagerInterface $entityManager,
+        TagAwareCacheInterface $cache): JsonResponse
     {
         $forceDelete = $request->toArray();
 
@@ -167,6 +205,8 @@ class ChipokomonController extends AbstractController
         }
 
         $entityManager->flush();
+        $cache->invalidateTags(["chimpokodexCache"]);
+
         return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
      
     }
