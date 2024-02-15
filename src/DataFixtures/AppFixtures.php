@@ -47,7 +47,7 @@ class AppFixtures extends Fixture
             //Add to transaction
             $manager->persist($chimpokodex);
         }
-
+ 
         //Execute transaction 
         foreach ($chimpokodexEntries as $key => $chimpokodexEntry) {
             $evolution = $chimpokodexEntries[array_rand($chimpokodexEntries, 1)];
@@ -56,7 +56,5 @@ class AppFixtures extends Fixture
         }
 
         $manager->flush();
-
-
     }
 }

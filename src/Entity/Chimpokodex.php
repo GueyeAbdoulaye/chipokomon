@@ -7,6 +7,10 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+
+//Serializer Groups
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ChimpokodexRepository::class)]
 class Chimpokodex
@@ -14,27 +18,38 @@ class Chimpokodex
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(["getAllWithinEvolutions", "getAll", "updateChimpo"])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(["getAllWithinEvolutions", "getAll"])]
+    #[Assert\NotBlank(message:"Un Chimpokodex doit avoir un nom")]
+    #[Assert\NotNull(message:"Un Chimpokodex doit avoir un nom")]
+    #[Assert\Length(min:5, minMessage: "Le nom d'un Chimpokodex doit forcement faire plus de {{limit}} character")]
     private ?string $name = null;
 
     #[ORM\Column]
+    #[Groups(["getAllWithinEvolutions", "getAll"])]
     private ?int $pvMax = null;
 
     #[ORM\ManyToMany(targetEntity: self::class, inversedBy: 'devolution')]
+    #[Groups(["getAll"])]
     private Collection $evolution;
 
     #[ORM\ManyToMany(targetEntity: self::class, mappedBy: 'evolution')]
+    #[Groups(["getAll"])]
     private Collection $devolution;
 
     #[ORM\Column(length: 24)]
+    #[Groups(["getAll"])]
     private ?string $status = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(["getAllWithinEvolutions", "getAll"])]
     private ?\DateTimeInterface $createdAt = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(["getAllWithinEvolutions", "getAll"])]
     private ?\DateTimeInterface $updatedAt = null;
 
     public function __construct()

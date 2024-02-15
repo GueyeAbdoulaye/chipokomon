@@ -26,9 +26,10 @@ class ChimpokodexRepository extends ServiceEntityRepository
       return $this->createQueryBuilder("s")
           ->andWhere('s.status = :status')
           ->setParameter('status', $status)
+          ->orderBy('s.id', 'ASC')
+          ->setMaxResults(15)
           ->getQuery()
           ->getResult();
-          
     }
 
 //    /**

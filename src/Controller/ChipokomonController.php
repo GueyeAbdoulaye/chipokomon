@@ -3,141 +3,172 @@
 namespace App\Controller;
 
 use App\Entity\Chimpokodex;
-use App\Repository\ChimpokodexRepository;
-use DateTime;
+use Doctrine\ORM\Mapping\Id;
 use Doctrine\ORM\EntityManagerInterface;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\ParamConverter;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use App\Repository\ChimpokodexRepository;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
-use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\ParamConverter;
 
 class ChipokomonController extends AbstractController
 {
-    
-    #[Route('/api/chipokomon/{idChimpokodex}', name: 'chipomkodex.get', methods: ['GET'])]
-    #[ParamConverter("chimpokodex", options: ["id"=>"idChimpokodex"])]
     /**
-     * Retourne tous les entrees du chipokomon de chipokodex
+     * Renvoie tous les Chimpokomon du Chimpokedex
      * 
      * @return JsonResponse
      */
-    public function getChipomkodex(Chimpokodex $chimpokodex, SerializerInterface $serializer): JsonResponse
+    #[Route('/api/chimpokodex', name: 'chimpokodex.getAll', methods: ['GET'])]
+    public function getAllChimpokodex(ChimpokodexRepository $repository,  SerializerInterface $serializer): JsonResponse
     {
-        $jsonChimpokodex = $serializer->serialize($chimpokodex,'json');
-        return new JsonResponse($jsonChimpokodex,200,[],true );
-    } 
+        // $chimpokodexs = $repository->findAll(); Ancienne méthode sans le filtre du statut
+        $chimpokodexs = $repository->findAllByStatus('ON');
+        $jsonChimpokodex = $serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
+        return new JsonResponse($jsonChimpokodex,200,[],true);   
+    }
 
-    
-    #[Route('/api/chipokomon', name: 'chipomkodex.getAll',methods: ['GET'])]
+    #[Route('/api/chimpokodex/{idChimpokodex}', name: 'chimpokodex.get', methods: ['GET'])]
+    #[ParamConverter("chimpokodex", options: ["id" => "idChimpokodex"])]
     /**
-     * Retourne tous les entrees du chipokomon de chipokodex
-     * 
+     * Renvoie le chimpokomon dont l'id est en paramètre
+     *
+     * @param Chimpokodex $chimpokodex
+     * @param SerializerInterface $serializer
      * @return JsonResponse
      */
-    public function getAllChipomkodex(ChimpokodexRepository $repository, SerializerInterface $serializer): JsonResponse
+    public function getChimpokodex(Chimpokodex $chimpokodex,  SerializerInterface $serializer, ChimpokodexRepository $repository): JsonResponse
     {
-
-        $chimpokodexs = $repository->findAll(); 
-        $jsonChimpokodex = $serializer->serialize($chimpokodexs,'json');
-        return new JsonResponse($jsonChimpokodex,200,[],true );
-    } 
-
-
-    #[Route('/api/chipokomon', name: 'chipomkodex.post', methods: ['POST'])]
+        $chimpokodexs = $repository->findByStatus('ON',$chimpokodex->getId());
+        $jsonChimpokodex = $serializer->serialize($chimpokodexs, 'json', ['groups' => "getAllWithinEvolutions"]);
+        return new JsonResponse($jsonChimpokodex,200,[],true); 
+    }
+    
+    #[Route('/api/chimpokodex', name: 'chimpokodex.post', methods: ['POST'])]
     /**
-     *  crée un chimpokodex
+     * Création Chimpokomon
      *
      * @param Request $request
      * @param SerializerInterface $serializer
      * @param EntityManagerInterface $manager
-     * @param UrlGeneratorInterface $urlGeneratorInterface
+     * @param UrlGeneratorInterface $urlGenerator
      * @return JsonResponse
      */
-    public function createChimpokodex(Request $request, SerializerInterface $serializer, EntityManagerInterface $manager, UrlGeneratorInterface $urlGeneratorInterface): JsonResponse
+    public function createChimpokodex(Request $request,  SerializerInterface $serializer, EntityManagerInterface $manager, UrlGeneratorInterface $urlGenerator, ChimpokodexRepository $repository, ValidatorInterface $validator): JsonResponse
     {
+        $chimpokodex = $serializer->deserialize($request->getContent(), Chimpokodex::class,"json");
+        // Cette ligne récupère le contenu Json mis en body de la requete (en désérialisant le contenu de la requête) et le place dans la variable chimpokomon.
 
-        $chimpokodex = $serializer->deserialize($request->getContent(),Chimpokodex::class,"json" );
         $dateNow = new \DateTime();
 
-        $chimpokodex->setStatus("ON")
+        $evolutionID = $request->toArray()["evolutionId"];
+        $evolution = $repository->find($evolutionID);
+
+        if(!is_null($evolution) && $evolution instanceof Chimpokodex) {
+            $chimpokodex->addEvolution($evolution);
+        }
+
+        $chimpokodex
+        ->setStatus('ON')
         ->setCreatedAt($dateNow)
         ->setUpdatedAt($dateNow);
-        
 
-       $manager->persist($chimpokodex);
-       $manager->flush();
-      
-       $jsonChimpokodex = $serializer->serialize($chimpokodex,'json');
-
-       $location = $urlGeneratorInterface->generate('chipomkodex.get',["idChimpokodex"=>$chimpokodex->getId()],);
-       //$request->getContent();
-
-       return new JsonResponse($jsonChimpokodex,Response::HTTP_CREATED,["Location"=>$location], true); 
-    } 
-
-
-    #[Route('/api/chipokomon/{id}', name: 'chipomkodex.update', methods: ['PUT'])]
-    /**
-     * mettre à  jour chimpokodex
-     *
-     * @param Chimpokodex $chimpokodex
-     * @param Request $request
-     * @param SerializerInterface $serializer
-     * @param EntityManagerInterface $manager
-     * @return JsonResponse
-     */
-    public function updateChimpokodex(Chimpokodex $chimpokodex , Request $request, SerializerInterface $serializer, EntityManagerInterface $manager): JsonResponse
-    {
-
-        $updatedChimpokodex = $serializer->deserialize($request->getContent(), Chimpokodex::class, 'json', [AbstractNormalizer::OBJECT_TO_POPULATE => $chimpokodex]);
-        $updatedChimpokodex->setUpdatedAt(new DateTime()); 
-        $manager->persist($updatedChimpokodex);
-        $manager->flush();
-       return new JsonResponse(null,Response::HTTP_NO_CONTENT);  
-    }
-
-/*     #[Route('/api/chipokomon/{id}', name: 'chipomkodex.delete', methods: ['DELETE'])]
-    public function deleteChimpokodex(Chimpokodex $chimpokodex , Request $request, SerializerInterface $serializer, EntityManagerInterface $manager, UrlGeneratorInterface $urlGeneratorInterface): JsonResponse
-    {
-
-        $manager->remove($chimpokodex);
-        $manager->flush();
-        return new JsonResponse(null,Response::HTTP_NO_CONTENT);  
-    }
-
- */
-
-    #[Route('/api/chipokomon/{id}', name: 'chipomkodex.softDelete', methods: ['DELETE'])]
-    /**
-     * Undocumented function
-     *
-     * @param Chimpokodex $chimpokodex
-     * @param Request $request
-     * @param SerializerInterface $serializer
-     * @param EntityManagerInterface $manager
-     * @param UrlGeneratorInterface $urlGeneratorInterface
-     * @return JsonResponse
-     */
-     public function softDeleteChimpokodexVersusUn( Chimpokodex $chimpokodex,Request $request, EntityManagerInterface $manager, ChimpokodexRepository $chimpokodexRepository): JsonResponse
-    { 
-
-        $force = $request->toArray();
-        
-        if(isset($force["force"]) && $force["force"]){
-            $manager->remove($chimpokodex);
-        }else{
-            $chimpokodex->setStatus("OFF"); 
+        $errors = $validator->validate($chimpokodex);
+        if ($errors->count() > 0){
+            return new JsonResponse($serializer->serialize($errors, 'json'), JsonResponse::HTTP_BAD_REQUEST, [], true);
         }
+
+        $manager->persist($chimpokodex);
         $manager->flush();
+    
+        $jsonChimpokodex = $serializer->serialize($chimpokodex, 'json', ['groups' => "getAllWithinEvolutions"]);
 
+        $location = $urlGenerator->generate('chimpokodex.get', ["idChimpokodex" => $chimpokodex->getId()], UrlGeneratorInterface::ABSOLUTE_URL);
+
+
+        return new JsonResponse($jsonChimpokodex,Response::HTTP_CREATED,["Location" => $location],true);
+    }
+
+    #[Route('/api/chimpokodex/{id}', name: 'chimpokodex.update', methods: ['PUT'])]
+    /**
+     * Modifier un Chimpo
+     *
+     * @param Chimpokodex $chimpokodex
+     * @param Request $request
+     * @param SerializerInterface $serializer
+     * @param EntityManagerInterface $entityManager
+     * @param UrlGeneratorInterface $urlGenerator
+     * @return JsonResponse
+     */
+    public function updateChimpokodex(Chimpokodex $chimpokodex, Request $request,  SerializerInterface $serializer, EntityManagerInterface $entityManager, ChimpokodexRepository $repository): JsonResponse
+    {
+        $updatedChimpokodex = $serializer->deserialize($request->getContent(), Chimpokodex::class, "json", [AbstractNormalizer::OBJECT_TO_POPULATE => $chimpokodex]);
+        $updatedChimpokodex->setUpdatedAt(new \DateTime());
+
+        if (isset($request->toArray()["evolutionId"])){
+            $newEvolutionID = $request->toArray()["evolutionId"];
+            $newEvolution = $repository->find($newEvolutionID);
+            $oldEvolution = $repository->find($chimpokodex->getEvolution()->first());
+
+
+            if(!is_null($newEvolution) && $newEvolution instanceof Chimpokodex && $oldEvolution !== $newEvolution) {
+                $updatedChimpokodex->removeEvolution($oldEvolution);
+                $updatedChimpokodex->addEvolution($newEvolution);
+            }
+        }
         
+        $entityManager->persist($updatedChimpokodex);
+        $entityManager->flush();
 
-        return new JsonResponse(null,Response::HTTP_NO_CONTENT);  
-    } 
+        return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
+    }
+
+    // #[Route('/api/chimpokodex/{id}', name: 'chimpokodex.delete', methods: ['DELETE'])]
+    // /**
+    //  * Supprimer un Chimpo (on préfèrera changer le status plutot que de supprimer)
+    //  *
+    //  * @param Chimpokodex $chimpokodex
+    //  * @param EntityManagerInterface $entityManager
+    //  * @return JsonResponse
+    //  */
+    // public function deleteChimpokodex(Chimpokodex $chimpokodex, EntityManagerInterface $entityManager): JsonResponse
+    // {
+    //     $entityManager->remove($chimpokodex);
+    //     $entityManager->flush();
+
+    //     return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
+    // }
+    
+    #[Route('/api/chimpokodex/{id}', name: 'chimpokodex.softdelete', methods: ['DELETE'])]
+    /**
+     * Mettre en OFF le statut d'un chimpokomon ou alors le delete si on précise 'forcedelete = true'
+     *
+     * @param Chimpokodex $chimpokodex
+     * @param Request $request
+     * @param SerializerInterface $serializer
+     * @param EntityManagerInterface $entityManager
+     * @return JsonResponse
+     */
+    public function softdeleteChimpokodex(Chimpokodex $chimpokodex,  Request $request,  SerializerInterface $serializer, EntityManagerInterface $entityManager): JsonResponse
+    {
+        $forceDelete = $request->toArray();
+
+        if(isset($forceDelete["forcedelete"]) && $forceDelete["forcedelete"] == true)
+        {
+            $entityManager->remove($chimpokodex);
+        }
+        else {
+            $chimpokodex->setStatus("OFF");
+        }
+
+        $entityManager->flush();
+        return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
+     
+    }
 
 }
