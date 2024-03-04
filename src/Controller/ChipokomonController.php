@@ -3,7 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\Chimpokodex;
-use Doctrine\ORM\Mapping\Id;
+use OpenApi\Attributes as OA;
+use Nelmio\ApiDocBundle\Annotation\Model;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\ChimpokodexRepository;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
@@ -23,10 +24,22 @@ use Symfony\Contracts\Cache\TagAwareCacheInterface;
 class ChipokomonController extends AbstractController
 {
     /**
-     * Renvoie tous les Chimpokomon du Chimpokedex
-     * 
+     * Renvoie toutes les entrées de chimpokodex
+     *
+     * @param ChimpokodexRepository $repository
+     * @param SerializerInterface $serializer
+     * @param TagAwareCacheInterface $cache
      * @return JsonResponse
      */
+    
+    #[OA\Response(
+        response:200,
+        description: "Retourne la liste des chimpokomons",
+        content: new OA\JsonContent(
+            type: "array",
+            items: new OA\Items(ref: new Model(type:Chimpokodex::class))
+        )
+    )]
     #[Route('/api/chimpokodex', name: 'chimpokodex.getAll', methods: ['GET'])]
     #[IsGranted("IS_AUTHENTICATED_FULLY")]
     public function getAllChimpokodex(
